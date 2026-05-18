@@ -1,68 +1,115 @@
 package com.kursach.mobile.api
 
 import retrofit2.Call
+import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
-import retrofit2.http.Body
-import retrofit2.http.Path
 
-/**
- * Retrofit service interface for backend API endpoints.
- * Add your endpoints here as needed.
- *
- * Example endpoints:
- * - Health check / ping
- * - User authentication
- * - Data retrieval
- */
 interface ApiService {
+    @POST("api/auth/login")
+    fun login(@Body request: LoginRequest): Call<AuthResponse>
 
-    /**
-     * Health check endpoint to verify backend connectivity.
-     * Endpoint: GET /api/health
-     */
-    @GET("api/health")
-    fun healthCheck(): Call<HealthCheckResponse>
+    @GET("api/auth/me")
+    fun me(): Call<AuthResponse>
 
-    /**
-     * Example: Fetch user data by ID
-     * Endpoint: GET /api/users/{id}
-     */
-    @GET("api/users/{id}")
-    fun getUserById(@Path("id") userId: String): Call<UserResponse>
+    @POST("api/auth/logout")
+    fun logout(): Call<MessageResponse>
 
-    /**
-     * Example: Create or update user
-     * Endpoint: POST /api/users
-     */
-    @POST("api/users")
-    fun createUser(@Body user: UserRequest): Call<UserResponse>
+    @GET("api/dashboard")
+    fun dashboard(): Call<DashboardResponse>
 
-    // Add more endpoints as needed for your application
+    @POST("api/components/add")
+    fun addComponent(@Body request: ComponentRequest): Call<MessageResponse>
+
+    @POST("api/components/update")
+    fun updateComponent(@Body request: UpdateComponentRequest): Call<MessageResponse>
+
+    @POST("api/components/remove")
+    fun removeComponent(@Body request: ComponentIdRequest): Call<MessageResponse>
+
+    @POST("api/components/fix")
+    fun fixComponent(@Body request: ComponentIdRequest): Call<MessageResponse>
+
+    @POST("api/assignments/assign")
+    fun assignComponent(@Body request: AssignComponentRequest): Call<MessageResponse>
+
+    @POST("api/assignments/unassign")
+    fun unassignComponent(@Body request: ComponentIdRequest): Call<MessageResponse>
+
+    @POST("api/assignments/return")
+    fun returnComponent(@Body request: ComponentIdRequest): Call<MessageResponse>
+
+    @POST("api/assignments/return-broken")
+    fun returnBrokenComponent(@Body request: ComponentIdRequest): Call<MessageResponse>
 }
 
-/**
- * Response model for health check.
- */
-data class HealthCheckResponse(
+data class LoginRequest(
+    val username: String,
+    val password: String
+)
+
+data class AuthResponse(
+    val user: AuthUser
+)
+
+data class AuthUser(
+    val id: Long,
+    val username: String,
+    val role: String
+)
+
+data class MessageResponse(
+    val message: String
+)
+
+data class DashboardResponse(
+    val user: AuthUser,
+    val items: List<DashboardComponent>,
+    val users: List<AuthUser>,
+    val assignedEquipmentIds: List<Long>,
+    val assignmentByEquipmentId: Map<String, String?>,
+    val warehouseReport: WarehouseReport?
+)
+
+data class WarehouseReport(
+    val totalEquipment: Int,
+    val damagedEquipment: Int,
+    val assignedEquipment: Int,
+    val freeEquipment: Int,
+    val equipment: List<DashboardComponent>
+)
+
+data class DashboardComponent(
+    val id: Long,
+    val name: String,
+    val type: String,
+    val serial: String,
     val status: String,
-    val timestamp: Long
+    val description: String? = null
 )
 
-/**
- * Response model for user data.
- */
-data class UserResponse(
-    val id: String,
+data class ComponentRequest(
     val name: String,
-    val email: String,
-    val createdAt: Long
+    val type: String,
+    val serial: String,
+    val description: String,
+    val status: String
 )
 
-/**
- * Request model for creating/updating user.
- */
-data class UserRequest(
+data class UpdateComponentRequest(
+    val id: Long,
     val name: String,
-    val email: String
+    val type: String,
+    val serial: String,
+    val status: String,
+    val description: String
+)
+
+data class ComponentIdRequest(
+    val id: Long
+)
+
+data class AssignComponentRequest(
+    val id: Long,
+    val userId: Long
 )

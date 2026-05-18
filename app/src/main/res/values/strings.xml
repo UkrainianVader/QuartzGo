@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Kursach Mobile</string>
+    <string name="app_name">LOL</string>
+    <string name="component_details_format">%1$s | %2$s | %3$s</string>
+    <string name="component_status_format">Status: %1$s</string>
+    <string name="component_assignee_format">Assigned: %1$s</string>
 </resources>

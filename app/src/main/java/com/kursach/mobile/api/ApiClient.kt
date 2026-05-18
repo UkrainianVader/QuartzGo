@@ -2,37 +2,53 @@ package com.kursach.mobile.api
 
 import android.content.Context
 import com.google.gson.GsonBuilder
+import okhttp3.Cookie
+import okhttp3.CookieJar
+import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
 
-/**
- * Singleton API client for Retrofit-based HTTP communication with backend.
- * Configures OkHttp client with logging, timeouts, and Gson for JSON serialization.
- */
 object ApiClient {
-    private var retrofit: Retrofit? = null
-    private var baseUrl: String = "http://10.0.2.2:3000" // Default for emulator
+    private const val PREFS_NAME = "kursach_mobile_settings"
+    private const val KEY_BASE_URL = "api_base_url"
+    private const val DEFAULT_BASE_URL = "http://10.0.2.2:3000/"
 
-    /**
-     * Initialize the API client with a custom base URL.
-     * Reads API_BASE_URL from local.properties if available.
-     *
-     * @param context Android application context (for local.properties access if needed)
-     * @param customBaseUrl Optional override for the base URL
-     */
-    fun init(context: Context, customBaseUrl: String? = null) {
-        if (customBaseUrl != null) {
-            baseUrl = customBaseUrl
+    private val cookieJar = SessionCookieJar()
+    private var retrofit: Retrofit? = null
+    private var baseUrl: String = DEFAULT_BASE_URL
+
+    fun init(context: Context, customBaseUrl: String? = null): String {
+        val resolvedBaseUrl = normalizeBaseUrl(
+            customBaseUrl ?: context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .getString(KEY_BASE_URL, DEFAULT_BASE_URL)
+                .orEmpty()
+        )
+
+        if (resolvedBaseUrl != baseUrl) {
+            baseUrl = resolvedBaseUrl
+            retrofit = null
         }
-        // TODO: Read API_BASE_URL from local.properties at runtime
+
+        if (customBaseUrl != null) {
+            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .edit()
+                .putString(KEY_BASE_URL, baseUrl)
+                .apply()
+        }
+
+        return baseUrl
     }
 
-    /**
-     * Get or create the Retrofit instance with OkHttp client.
-     */
+    fun currentBaseUrl(): String = baseUrl
+
+    fun clearSession() {
+        cookieJar.clear()
+    }
+
     fun getRetrofit(): Retrofit {
         if (retrofit == null) {
             retrofit = Retrofit.Builder()
@@ -44,15 +60,13 @@ object ApiClient {
         return retrofit!!
     }
 
-    /**
-     * Create OkHttp client with logging and timeout configuration.
-     */
     private fun createOkHttpClient(): OkHttpClient {
         val loggingInterceptor = HttpLoggingInterceptor().apply {
             level = HttpLoggingInterceptor.Level.BODY
         }
 
         return OkHttpClient.Builder()
+            .cookieJar(cookieJar)
             .addInterceptor(loggingInterceptor)
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
@@ -60,10 +74,37 @@ object ApiClient {
             .build()
     }
 
-    /**
-     * Create or get the API service interface.
-     */
     fun <T> create(serviceClass: Class<T>): T {
         return getRetrofit().create(serviceClass)
+    }
+
+    private fun normalizeBaseUrl(value: String): String {
+        val trimmed = value.trim().ifEmpty { DEFAULT_BASE_URL }
+        val withTrailingSlash = if (trimmed.endsWith("/")) trimmed else "$trimmed/"
+        return withTrailingSlash.toHttpUrlOrNull()?.toString() ?: DEFAULT_BASE_URL
+    }
+}
+
+private class SessionCookieJar : CookieJar {
+    private val cookies = mutableListOf<Cookie>()
+
+    override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
+        synchronized(this) {
+            this.cookies.removeAll { it.expiresAt < System.currentTimeMillis() }
+            this.cookies.removeAll { existing -> cookies.any { it.name == existing.name && it.domain == existing.domain && it.path == existing.path } }
+            this.cookies.addAll(cookies)
+        }
+    }
+
+    override fun loadForRequest(url: HttpUrl): List<Cookie> {
+        synchronized(this) {
+            return cookies.filter { it.expiresAt >= System.currentTimeMillis() && it.matches(url) }
+        }
+    }
+
+    fun clear() {
+        synchronized(this) {
+            cookies.clear()
+        }
     }
 }

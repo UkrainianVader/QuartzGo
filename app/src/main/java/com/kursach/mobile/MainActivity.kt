@@ -1,46 +1,115 @@
 package com.kursach.mobile
 
+import android.content.Intent
 import android.os.Bundle
-import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import com.google.android.material.button.MaterialButton
+import com.google.android.material.textfield.TextInputEditText
+import com.google.android.material.textfield.TextInputLayout
 import com.kursach.mobile.api.ApiClient
 import com.kursach.mobile.api.ApiService
+import com.kursach.mobile.api.AuthResponse
+import com.kursach.mobile.api.LoginRequest
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
 
 class MainActivity : AppCompatActivity() {
+    private lateinit var apiUrlLayout: TextInputLayout
+    private lateinit var apiUrlInput: TextInputEditText
+    private lateinit var usernameInput: TextInputEditText
+    private lateinit var passwordInput: TextInputEditText
+    private lateinit var statusText: androidx.appcompat.widget.AppCompatTextView
+
+    private val api by lazy { ApiClient.create(ApiService::class.java) }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        val statusText = findViewById<TextView>(R.id.apiHint)
+        apiUrlLayout = findViewById(R.id.apiUrlLayout)
+        apiUrlInput = findViewById(R.id.apiUrlInput)
+        usernameInput = findViewById(R.id.loginUserInput)
+        passwordInput = findViewById(R.id.loginPasswordInput)
+        statusText = findViewById(R.id.statusText)
 
-        // Initialize API client
-        ApiClient.init(this)
+        val savedUrl = ApiClient.init(this)
+        apiUrlInput.setText(savedUrl.removeSuffix("/"))
 
-        // Create API service instance
-        val apiService = ApiClient.create(ApiService::class.java)
+        findViewById<MaterialButton>(R.id.saveApiUrlButton).setOnClickListener {
+            saveApiUrl()
+        }
 
-        // Example: Call health check endpoint
-        statusText.text = "Checking backend connectivity..."
+        findViewById<MaterialButton>(R.id.loginButton).setOnClickListener {
+            login()
+        }
 
-        apiService.healthCheck().enqueue(object : Callback<com.kursach.mobile.api.HealthCheckResponse> {
-            override fun onResponse(
-                call: Call<com.kursach.mobile.api.HealthCheckResponse>,
-                response: Response<com.kursach.mobile.api.HealthCheckResponse>
-            ) {
-                if (response.isSuccessful) {
-                    val status = response.body()?.status ?: "unknown"
-                    statusText.text = "Backend status: $status"
-                } else {
-                    statusText.text = "Backend responded: ${response.code()}"
+        setStatus("Enter the backend URL and sign in.")
+    }
+
+    override fun onStart() {
+        super.onStart()
+        api.me().enqueue(object : Callback<AuthResponse> {
+            override fun onResponse(call: Call<AuthResponse>, response: Response<AuthResponse>) {
+                if (response.isSuccessful && response.body() != null) {
+                    openTable(response.body()!!.user.username)
                 }
             }
 
-            override fun onFailure(call: Call<com.kursach.mobile.api.HealthCheckResponse>, t: Throwable) {
-                statusText.text = "Connection failed: ${t.message}"
+            override fun onFailure(call: Call<AuthResponse>, t: Throwable) {
+                setStatus(t.message ?: "Ready.")
             }
         })
+    }
+
+    private fun saveApiUrl() {
+        val rawUrl = apiUrlInput.text?.toString()?.trim().orEmpty()
+        if (rawUrl.isBlank()) {
+            apiUrlLayout.error = "Enter an API URL."
+            return
+        }
+
+        apiUrlLayout.error = null
+        val normalizedUrl = if (rawUrl.endsWith("/")) rawUrl else "$rawUrl/"
+        ApiClient.init(this, normalizedUrl)
+        setStatus("API URL saved: ${normalizedUrl.removeSuffix("/")}")
+    }
+
+    private fun login() {
+        val username = usernameInput.text?.toString()?.trim().orEmpty()
+        val password = passwordInput.text?.toString().orEmpty()
+
+        if (username.isBlank() || password.isBlank()) {
+            setStatus("Enter username and password.")
+            return
+        }
+
+        api.login(LoginRequest(username = username, password = password))
+            .enqueue(object : Callback<AuthResponse> {
+                override fun onResponse(call: Call<AuthResponse>, response: Response<AuthResponse>) {
+                    if (response.isSuccessful && response.body() != null) {
+                        openTable(response.body()!!.user.username)
+                    } else {
+                        setStatus("Login failed (${response.code()}).")
+                    }
+                }
+
+                override fun onFailure(call: Call<AuthResponse>, t: Throwable) {
+                    setStatus(t.message ?: "Login request failed.")
+                }
+            })
+    }
+
+    private fun openTable(username: String) {
+        startActivity(
+            Intent(this, TableActivity::class.java)
+                .putExtra(TableActivity.EXTRA_USERNAME, username)
+        )
+        finish()
+    }
+
+    private fun setStatus(message: String) {
+        statusText.text = message
     }
 }
