@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Warehouse Helper</string>
+    <string name="app_name">WareFlow Go</string>
     <string name="component_details_format">%1$s | %2$s | %3$s</string>
     <string name="component_status_format">Статус: %1$s</string>
     <string name="component_assignee_format">Призначено: %1$s</string>
